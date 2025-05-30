@@ -12,8 +12,8 @@ vim.api.nvim_create_autocmd({ "BufReadPre", "FileReadPre" }, {
     vim.opt_local.bin = true
 
     -- Save the current 'ch' value to a buffer-local variable
-    vim.b.ch_save = vim.opt_local.ch
-    vim.cmd "set ch=2"
+    vim.b.ch_save = vim.o.ch
+    vim.o.ch = 2
   end,
 })
 
@@ -27,9 +27,9 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "FileReadPost" }, {
     vim.opt_local.bin = false
 
     -- Restore the 'ch' value from the buffer-local variable
-    vim.opt_local.ch = vim.b.ch_save
-    vim.cmd "unlet b:ch_save"
-    vim.cmd(":doautocmd BufReadPost " .. vim.fn.expand "%:r")
+    vim.o.ch = vim.b.ch_save
+    vim.b.ch_save = nil
+    vim.api.nvim_exec_autocmds("BufReadPost", { pattern = vim.fn.expand "%:r" })
   end,
 })
 
