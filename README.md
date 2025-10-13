@@ -23,6 +23,12 @@ Copy [`plugin/gpg.lua`](https://github.com/benoror/gpg.nvim/blob/main/plugin/gpg
 }
 ```
 
+## Config
+
+### Customize file extensions
+
+Vía @Frestein [Frestein/dotfiles/dot_config/nvim/lua/plugins/extras/utils/gpg.lua](https://github.com/Frestein/dotfiles/blob/5169f2a5cae4bb992ea5c875a51f816a82e4582e/dot_config/nvim/lua/plugins/extras/utils/gpg.lua)
+
 ## Requirements
 
 - `gpg`
