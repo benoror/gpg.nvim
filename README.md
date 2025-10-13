@@ -27,6 +27,20 @@ Copy [`plugin/gpg.lua`](https://github.com/benoror/gpg.nvim/blob/main/plugin/gpg
 
 ### Customize file extensions
 
+```lua
+vim.filetype.add({
+	extension = {
+		gpg = "gpg",
+		asc = "gpg",
+	},
+})
+
+return {
+	"benoror/gpg.nvim",
+	ft = { "gpg", "asc", "pgp" },
+}
+```
+
 Vía @Frestein [Frestein/dotfiles/dot_config/nvim/lua/plugins/extras/utils/gpg.lua](https://github.com/Frestein/dotfiles/blob/5169f2a5cae4bb992ea5c875a51f816a82e4582e/dot_config/nvim/lua/plugins/extras/utils/gpg.lua)
 
 ## Requirements
