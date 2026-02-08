@@ -1,5 +1,5 @@
 local root = vim.fn.fnamemodify(vim.fn.expand("<sfile>"), ":p:h:h")
-package.path = root .. "/?.lua;" .. package.path
+package.path = root .. "/?.lua;" .. root .. "/tests/?.lua;" .. package.path
 
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not vim.loop.fs_stat(lazypath) then
