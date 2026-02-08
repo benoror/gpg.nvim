@@ -51,6 +51,7 @@ bash scripts/run_tests.sh tests/init_packer.lua
 
 Notes:
 - The tests create a temporary `GNUPGHOME` and a throwaway key, so your user keyring is not touched.
+- The tests also set `XDG_*` paths and `NVIM_APPNAME` to a temp directory to avoid writing artifacts into your normal Neovim runtime.
 - `tests/init_lazy.lua` and `tests/init_packer.lua` will clone their managers if missing (network required).
 
 ## Credits
