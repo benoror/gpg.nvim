@@ -27,11 +27,11 @@ jobs:
       - name: Run tests
         run: |
           if [ "${{ matrix.shell }}" = "bash" ]; then
-            bash scripts/test_bash.sh
+            make test-bash
           elif [ "${{ matrix.shell }}" = "zsh" ]; then
-            zsh scripts/test_zsh.sh
+            make test-zsh
           else
-            nu scripts/test_nu.nu
+            make test-nu
           fi
 
   manager-tests:
@@ -45,6 +45,6 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gnupg git
       - name: lazy.nvim compatibility
-        run: bash scripts/run_tests.sh tests/init_lazy.lua
+        run: make test-lazy
       - name: packer compatibility
-        run: bash scripts/run_tests.sh tests/init_packer.lua
+        run: make test-packer

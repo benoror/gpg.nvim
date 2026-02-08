@@ -37,21 +37,21 @@ All `*.gpg` files will be symmetrically decrypted/encrypted transparently using 
 Local smoke tests (headless Neovim, temp keyring):
 
 ```sh
-bash scripts/test_bash.sh
-zsh scripts/test_zsh.sh
-nu scripts/test_nu.nu
+make test-bash
+make test-zsh
+make test-nu
 ```
 
 Plugin manager compatibility checks:
 
 ```sh
-bash scripts/run_tests.sh tests/init_lazy.lua
-bash scripts/run_tests.sh tests/init_packer.lua
+make test-lazy
+make test-packer
 ```
 
 Notes:
 - The tests create a temporary `GNUPGHOME` and a throwaway key, so your user keyring is not touched.
-- The tests also set `XDG_*` paths and `NVIM_APPNAME` to a temp directory to avoid writing artifacts into your normal Neovim runtime.
+- The tests also set isolated `XDG_*` paths and `NVIM_APPNAME` to a temp directory to avoid writing artifacts into your normal Neovim runtime.
 - `tests/init_lazy.lua` and `tests/init_packer.lua` will clone their managers if missing (network required).
 
 ## Credits
