@@ -64,6 +64,24 @@ Vía @Frestein [Frestein/dotfiles/dot_config/nvim/lua/plugins/extras/utils/gpg.l
 
 All `*.gpg` files will be symmetrically decrypted/encrypted transparently using `gpg` tools
 
+### GPG agent TTY handling
+
+This plugin can update the GPG agent startup TTY (equivalent to
+`gpg-connect-agent updatestartuptty /bye`) to keep `pinentry-curses` attached
+to the current terminal. To enable it:
+
+```lua
+vim.g.gpg_update_tty = true
+```
+
+If you still see input issues with `pinentry-curses`, you can enable an
+optional "priming" step that runs `gpg --list-packets` on the file before
+decrypting so the passphrase is cached by the agent:
+
+```lua
+vim.g.gpg_prime_agent = true
+```
+
 ## Testing
 
 Local smoke tests (headless Neovim, temp keyring):
