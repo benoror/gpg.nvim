@@ -1,0 +1,50 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shell-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [bash, zsh, nu]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y gnupg zsh
+      - name: Setup Nushell
+        if: matrix.shell == 'nu'
+        uses: hustcer/setup-nu@v3
+        with:
+          check-latest: true
+      - name: Run tests
+        run: |
+          if [ "${{ matrix.shell }}" = "bash" ]; then
+            bash scripts/test_bash.sh
+          elif [ "${{ matrix.shell }}" = "zsh" ]; then
+            zsh scripts/test_zsh.sh
+          else
+            nu scripts/test_nu.nu
+          fi
+
+  manager-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y gnupg git
+      - name: lazy.nvim compatibility
+        run: bash scripts/run_tests.sh tests/init_lazy.lua
+      - name: packer compatibility
+        run: bash scripts/run_tests.sh tests/init_packer.lua
