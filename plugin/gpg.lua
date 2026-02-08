@@ -35,6 +35,9 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "FileReadPost" }, {
       return
     end
     local output_lines = vim.split(result.stdout, "\n", { plain = true })
+    if #output_lines > 0 and output_lines[#output_lines] == "" then
+      table.remove(output_lines, #output_lines)
+    end
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, output_lines)
     vim.api.nvim_buf_set_option(buf, "modified", false)
 
@@ -62,6 +65,9 @@ vim.api.nvim_create_autocmd({ "BufWritePre", "FileWritePre" }, {
       return
     end
     local output_lines = vim.split(result.stdout, "\n", { plain = true })
+    if #output_lines > 0 and output_lines[#output_lines] == "" then
+      table.remove(output_lines, #output_lines)
+    end
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, output_lines)
     vim.api.nvim_buf_set_option(buf, "modified", false)
   end,
