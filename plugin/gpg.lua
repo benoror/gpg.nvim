@@ -1,5 +1,43 @@
 local gpgGroup = vim.api.nvim_create_augroup("customGpg", { clear = true })
 
+local function get_gpg_tty()
+  local gpg_tty = vim.env.GPG_TTY
+  if not gpg_tty or gpg_tty == "" then
+    local tty = vim.trim(vim.fn.system "tty")
+    if tty ~= "" and not tty:match("not a tty") then
+      gpg_tty = tty
+    end
+  end
+  return gpg_tty
+end
+
+local function update_gpg_tty()
+  if vim.g.gpg_update_tty ~= true then
+    return
+  end
+  local gpg_tty = get_gpg_tty()
+  if not gpg_tty or gpg_tty == "" then
+    return
+  end
+  vim.env.GPG_TTY = gpg_tty
+  local result = vim.system({ "gpg-connect-agent", "updatestartuptty", "/bye" }):wait()
+  if result.code ~= 0 and vim.g.gpg_update_tty_verbose then
+    vim.notify("gpg-connect-agent failed: " .. (result.stderr or ""), vim.log.levels.WARN)
+  end
+end
+
+local function prime_gpg_agent(file_path)
+  if vim.g.gpg_prime_agent ~= true then
+    return
+  end
+  if file_path == "" then
+    return
+  end
+  local escaped = vim.fn.shellescape(file_path)
+  vim.cmd("silent! !gpg --quiet --list-packets " .. escaped .. " >/dev/null 2>&1")
+  vim.cmd "redraw!"
+end
+
 vim.api.nvim_create_autocmd({ "BufReadPre", "FileReadPre" }, {
   pattern = "*.gpg",
   group = gpgGroup,
@@ -26,6 +64,8 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "FileReadPost" }, {
   pattern = "*.gpg",
   group = gpgGroup,
   callback = function()
+    update_gpg_tty()
+    prime_gpg_agent(vim.fn.expand "%:p")
     local buf = vim.api.nvim_get_current_buf()
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     local input = table.concat(lines, "\n")
@@ -56,6 +96,7 @@ vim.api.nvim_create_autocmd({ "BufWritePre", "FileWritePre" }, {
   pattern = "*.gpg",
   group = gpgGroup,
   callback = function()
+    update_gpg_tty()
     local buf = vim.api.nvim_get_current_buf()
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     local input = table.concat(lines, "\n")
