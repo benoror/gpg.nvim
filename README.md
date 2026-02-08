@@ -64,6 +64,27 @@ Vía @Frestein [Frestein/dotfiles/dot_config/nvim/lua/plugins/extras/utils/gpg.l
 
 All `*.gpg` files will be symmetrically decrypted/encrypted transparently using `gpg` tools
 
+## Testing
+
+Local smoke tests (headless Neovim, temp keyring):
+
+```sh
+bash scripts/test_bash.sh
+zsh scripts/test_zsh.sh
+nu scripts/test_nu.nu
+```
+
+Plugin manager compatibility checks:
+
+```sh
+bash scripts/run_tests.sh tests/init_lazy.lua
+bash scripts/run_tests.sh tests/init_packer.lua
+```
+
+Notes:
+- The tests create a temporary `GNUPGHOME` and a throwaway key, so your user keyring is not touched.
+- `tests/init_lazy.lua` and `tests/init_packer.lua` will clone their managers if missing (network required).
+
 ## Credits
 
 ### Based off
