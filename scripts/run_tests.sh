@@ -15,6 +15,12 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+export XDG_DATA_HOME="$TMP_DIR/nvim-data"
+export XDG_STATE_HOME="$TMP_DIR/nvim-state"
+export XDG_CACHE_HOME="$TMP_DIR/nvim-cache"
+export NVIM_APPNAME="gpg-nvim-test"
+mkdir -p "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
+
 export GNUPGHOME="$TMP_DIR/gnupg"
 mkdir -p "$GNUPGHOME"
 chmod 700 "$GNUPGHOME"
