@@ -14,13 +14,25 @@ Editing GPG encrypted files symmetrically in NeoVIM
 
 Copy [`plugin/gpg.lua`](https://github.com/benoror/gpg.nvim/blob/main/plugin/gpg.lua) file to your `~/.config/nvim/lua/plugins/` directory
 
-### Using [lazy.nvim](https://github.com/folke/lazy.nvim):
+### Using
+
+#### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
 -- ~/.config/nvim/lua/plugins/gpg.lua
 {
    "benoror/gpg.nvim",
+   ft = { "gpg", "asc", "pgp" },
 }
+```
+
+#### vim.pack
+
+```lua
+-- ~/.config/nvim/init.lua
+vim.pack.add({
+   { "https://github.com/benoror/gpg.nvim" },
+})
 ```
 
 ## Config
@@ -31,7 +43,7 @@ Copy [`plugin/gpg.lua`](https://github.com/benoror/gpg.nvim/blob/main/plugin/gpg
 vim.filetype.add({
 	extension = {
 		gpg = "gpg",
-		asc = "gpg",
+		asc = "asc",
 	},
 })
 
