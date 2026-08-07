@@ -49,10 +49,26 @@ local function append_and_write(line)
   vim.cmd "write"
 end
 
+local function cmd_has(cmd, value)
+  for _, part in ipairs(cmd) do
+    if part == value then
+      return true
+    end
+  end
+  return false
+end
+
 local function with_gpg_mocks()
   local original_system = vim.system
   local original_cmd = vim.cmd
-  local calls = { update_tty = 0, prime = 0 }
+  local calls = {
+    update_tty = 0,
+    prime = 0,
+    decrypt = 0,
+    decrypt_loopback = 0,
+    decrypt_legacy = 0,
+    decrypt_passphrase_fd = 0,
+  }
 
   vim.system = function(cmd, opts)
     if type(cmd) == "table" and cmd[1] == "gpg-connect-agent" then
@@ -62,6 +78,17 @@ local function with_gpg_mocks()
           return { code = 0, stdout = "", stderr = "" }
         end,
       }
+    end
+    if type(cmd) == "table" and cmd[1] == "gpg" and cmd_has(cmd, "--decrypt") then
+      calls.decrypt = calls.decrypt + 1
+      if cmd_has(cmd, "--pinentry-mode") and cmd_has(cmd, "loopback") then
+        calls.decrypt_loopback = calls.decrypt_loopback + 1
+      else
+        calls.decrypt_legacy = calls.decrypt_legacy + 1
+      end
+      if cmd_has(cmd, "--passphrase-fd") then
+        calls.decrypt_passphrase_fd = calls.decrypt_passphrase_fd + 1
+      end
     end
     return original_system(cmd, opts)
   end
@@ -85,6 +112,10 @@ end
 local function assert_combo(file, update_tty, prime_agent, expect_update, expect_prime, calls)
   local before_update = calls.update_tty
   local before_prime = calls.prime
+  -- Headless runs have no TTY; set a dummy so update_gpg_tty reaches gpg-connect-agent.
+  if not vim.env.GPG_TTY or vim.env.GPG_TTY == "" then
+    vim.env.GPG_TTY = "/dev/tty"
+  end
   vim.g.gpg_update_tty = update_tty
   vim.g.gpg_prime_agent = prime_agent
   open_file(file)
@@ -104,6 +135,106 @@ local function assert_combo(file, update_tty, prime_agent, expect_update, expect
   end
 end
 
+local function assert_loopback_default(file, plaintext_file, calls)
+  vim.g.gpg_pinentry_loopback = nil
+  local before = calls.decrypt_loopback
+  assert_decrypted_matches(file, plaintext_file)
+  if calls.decrypt_loopback <= before then
+    error("Expected default decrypt to use --pinentry-mode loopback")
+  end
+  if calls.decrypt_passphrase_fd ~= 0 then
+    error("Did not expect passphrase-fd for unprotected/cached key")
+  end
+end
+
+local function assert_legacy_opt_out(file, plaintext_file, calls)
+  vim.g.gpg_pinentry_loopback = false
+  local before_legacy = calls.decrypt_legacy
+  local before_loopback = calls.decrypt_loopback
+  assert_decrypted_matches(file, plaintext_file)
+  if calls.decrypt_legacy <= before_legacy then
+    error("Expected gpg_pinentry_loopback=false to use legacy decrypt")
+  end
+  if calls.decrypt_loopback ~= before_loopback then
+    error("Did not expect loopback decrypt when opted out")
+  end
+  vim.g.gpg_pinentry_loopback = nil
+end
+
+local function assert_passphrase_retry(file, plaintext_file)
+  local original_system = vim.system
+  local original_inputsecret = vim.fn.inputsecret
+  local attempts = 0
+  local prompted = false
+
+  vim.g.gpg_pinentry_loopback = true
+  vim.fn.inputsecret = function()
+    prompted = true
+    return "test-passphrase"
+  end
+
+  vim.system = function(cmd, opts)
+    if type(cmd) == "table" and cmd[1] == "gpg" and cmd_has(cmd, "--decrypt") then
+      attempts = attempts + 1
+      if attempts == 1 then
+        if not (cmd_has(cmd, "--pinentry-mode") and cmd_has(cmd, "loopback")) then
+          error("First decrypt attempt should use loopback")
+        end
+        if cmd_has(cmd, "--passphrase-fd") then
+          error("First decrypt attempt should not use passphrase-fd")
+        end
+        return {
+          wait = function()
+            return {
+              code = 2,
+              stdout = "",
+              stderr = "gpg: Sorry, we are in batchmode - can't get input",
+            }
+          end,
+        }
+      end
+
+      if not cmd_has(cmd, "--passphrase-fd") then
+        error("Retry should use --passphrase-fd")
+      end
+      if opts == nil or type(opts.stdin) ~= "string" or not opts.stdin:find("test-passphrase", 1, true) then
+        error("Retry should pass passphrase on stdin")
+      end
+      if not cmd_has(cmd, file) then
+        error("Retry should decrypt the on-disk file path")
+      end
+
+      -- Fall through to real decrypt with empty passphrase key after consuming fd.
+      return original_system({
+        "gpg",
+        "--batch",
+        "--yes",
+        "--pinentry-mode",
+        "loopback",
+        "--decrypt",
+        "--",
+        file,
+      }, {})
+    end
+    return original_system(cmd, opts)
+  end
+
+  local ok, err = pcall(assert_decrypted_matches, file, plaintext_file)
+  vim.system = original_system
+  vim.fn.inputsecret = original_inputsecret
+  vim.g.gpg_pinentry_loopback = nil
+
+  if not ok then
+    error(err)
+  end
+  if not prompted then
+    error("Expected inputsecret prompt when loopback decrypt needs a passphrase")
+  end
+  if attempts ~= 2 then
+    error("Expected exactly one retry after passphrase prompt, got " .. tostring(attempts))
+  end
+end
+
 function M.run()
   local file = get_env_or_error "GPG_TEST_FILE"
   local plaintext_file = get_env_or_error "GPG_TEST_PLAINTEXT_FILE"
@@ -114,24 +245,36 @@ function M.run()
 
   vim.g.gpg_update_tty = nil
   vim.g.gpg_prime_agent = nil
-  assert_decrypted_matches(file, plaintext_file)
-  append_and_write(append_line)
+  vim.g.gpg_pinentry_loopback = nil
+  assert_loopback_default(file, plaintext_file, calls)
+  assert_legacy_opt_out(file, plaintext_file, calls)
 
   if calls.update_tty ~= 0 then
     error("Expected gpg_update_tty to be disabled by default")
   end
+
+  -- Content checks that need the unmodified fixture must run before write.
+  restore_mocks()
+  assert_passphrase_retry(file, plaintext_file)
+
+  calls, restore_mocks = with_gpg_mocks()
+  vim.g.gpg_update_tty = nil
+  vim.g.gpg_prime_agent = nil
+  vim.g.gpg_pinentry_loopback = nil
+  assert_decrypted_matches(file, plaintext_file)
+  append_and_write(append_line)
 
   assert_combo(file, false, false, false, false, calls)
   assert_combo(file, true, false, true, false, calls)
   assert_combo(file, false, true, false, true, calls)
   assert_combo(file, true, true, true, true, calls)
 
+  restore_mocks()
+
   local decrypted_lines = normalize_lines(vim.fn.readfile(expected_file))
   if #decrypted_lines == 0 then
     error("Expected decrypted output fixture to be non-empty")
   end
-
-  restore_mocks()
 end
 
 return M
