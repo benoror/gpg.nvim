@@ -65,6 +65,41 @@ Vía @Frestein [Frestein/dotfiles/dot_config/nvim/lua/plugins/extras/utils/gpg.l
 All `*.gpg` files will be decrypted/encrypted transparently using `gpg` tools
 (`--default-recipient-self` / asymmetric encrypt on write).
 
+### Encrypting / decrypting a visual selection
+
+This plugin intentionally stays focused on transparent whole-file editing for
+`*.gpg` (and similar) buffers. Inline encrypt/decrypt of a visual selection —
+including picking recipients from your keyring — is left to Neovim's built-in
+external filter (`:!`) and `gpg`, so the plugin remains small and agnostic.
+
+Select text in visual mode, then:
+
+```vim
+" Encrypt to yourself (ASCII-armored)
+:'<,'>!gpg -ae --default-recipient-self
+
+" Encrypt to a specific recipient
+:'<,'>!gpg -ae -r alice@example.com
+
+" Decrypt an armored PGP block
+:'<,'>!gpg -qd
+```
+
+Optional keymaps:
+
+```lua
+vim.keymap.set("v", "<leader>ge", ":!gpg -ae --default-recipient-self<CR>", {
+  desc = "GPG encrypt selection",
+})
+vim.keymap.set("v", "<leader>gd", ":!gpg -qd<CR>", {
+  desc = "GPG decrypt selection",
+})
+```
+
+For a recipient picker, list keys with `gpg --list-keys`, choose with
+`vim.ui.select` / Telescope / fzf-lua, then run the same filter with one or more
+`-r` flags. That UI is config-local and out of scope for this plugin.
+
 ### Passphrase prompting (default)
 
 By default, decrypt uses `--pinentry-mode loopback` so Neovim owns the
