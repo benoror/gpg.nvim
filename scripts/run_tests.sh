@@ -24,6 +24,8 @@ mkdir -p "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
 export GNUPGHOME="$TMP_DIR/gnupg"
 mkdir -p "$GNUPGHOME"
 chmod 700 "$GNUPGHOME"
+# Permit loopback pinentry used by the plugin's default decrypt path.
+printf 'allow-loopback-pinentry\n' > "$GNUPGHOME/gpg-agent.conf"
 
 PLAINTEXT_FILE="$TMP_DIR/plain.txt"
 EXPECTED_FILE="$TMP_DIR/expected.txt"
@@ -50,7 +52,9 @@ export GPG_TEST_PLAINTEXT_FILE="$PLAINTEXT_FILE"
 export GPG_TEST_EXPECTED_FILE="$EXPECTED_FILE"
 export GPG_TEST_APPEND="$GPG_APPEND_LINE"
 
-nvim --headless -u "$INIT_FILE" +"lua require('tests.test').run()" +qa
+nvim --headless -u "$INIT_FILE" \
+  -c "lua local ok, err = pcall(require('tests.test').run); if not ok then io.stderr:write(tostring(err) .. '\n'); vim.cmd('cquit 1') end" \
+  -c qa
 
 gpg --batch --decrypt "$GPG_FILE" > "$TMP_DIR/decrypted.txt"
 if ! diff -u "$EXPECTED_FILE" "$TMP_DIR/decrypted.txt" >/dev/null; then

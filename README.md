@@ -57,26 +57,43 @@ Vía @Frestein [Frestein/dotfiles/dot_config/nvim/lua/plugins/extras/utils/gpg.l
 
 ## Requirements
 
-- `gpg`
-- Optional: `pinentry-mac`
+- `gpg` (GnuPG 2.1+ recommended for loopback pinentry)
+- Optional: GUI pinentry (only needed if you disable loopback)
 
 ## Usage
 
-All `*.gpg` files will be symmetrically decrypted/encrypted transparently using `gpg` tools
+All `*.gpg` files will be decrypted/encrypted transparently using `gpg` tools
+(`--default-recipient-self` / asymmetric encrypt on write).
 
-### GPG agent TTY handling
+### Passphrase prompting (default)
 
-This plugin can update the GPG agent startup TTY (equivalent to
-`gpg-connect-agent updatestartuptty /bye`) to keep `pinentry-curses` attached
-to the current terminal. To enable it:
+By default, decrypt uses `--pinentry-mode loopback` so Neovim owns the
+passphrase prompt via `inputsecret()` when the agent does not already have the
+key cached. This avoids `pinentry-curses` TTY contention (dropped key presses)
+inside Neovim — see [issue #8](https://github.com/benoror/gpg.nvim/issues/8)
+and [docs/pinentry.md](docs/pinentry.md) for the assessment, pros/cons, and
+alternatives.
+
+Loopback is on by default. To restore the legacy external pinentry path:
+
+```lua
+vim.g.gpg_pinentry_loopback = false
+```
+
+### Legacy GPG agent TTY handling
+
+These opt-in knobs are legacy mitigations for the external pinentry path.
+Prefer the default loopback behavior above.
+
+Update the GPG agent startup TTY (equivalent to
+`gpg-connect-agent updatestartuptty /bye`):
 
 ```lua
 vim.g.gpg_update_tty = true
 ```
 
-If you still see input issues with `pinentry-curses`, you can enable an
-optional "priming" step that runs `gpg --list-packets` on the file before
-decrypting so the passphrase is cached by the agent:
+Optional "priming" step that runs `gpg --list-packets` before decrypting so
+the passphrase may be cached by the agent:
 
 ```lua
 vim.g.gpg_prime_agent = true
@@ -119,4 +136,6 @@ https://github.com/jamessan/vim-gnupg
 
 ## Further reading
 
+- [Pinentry / passphrase notes](docs/pinentry.md) (issue #8 assessment, pros/cons)
 - [Setup GPG on macOS](https://dev.to/zemse/setup-gpg-on-macos-2iib)
+- [vim-gnupg#32](https://github.com/jamessan/vim-gnupg/issues/32) (related Neovim + pinentry TTY contention)
