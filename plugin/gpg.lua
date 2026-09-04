@@ -71,8 +71,41 @@ local function prompt_passphrase()
   return value, nil
 end
 
+-- Safety timeout on the loopback probe wait so a wedged gpg cannot freeze nvim.
+-- false or 0 waits forever (previous behavior). See issue #20.
+local DEFAULT_PROBE_TIMEOUT_MS = 30000
+
+local function probe_wait_timeout()
+  local t = vim.g.gpg_probe_timeout
+  if t == false or t == 0 then
+    return nil
+  end
+  if type(t) == "number" and t > 0 then
+    return t
+  end
+  return DEFAULT_PROBE_TIMEOUT_MS
+end
+
+local function probe_timed_out(result)
+  -- vim.system():wait() kills the process (SIGKILL = 9) and sets code 124.
+  return result == nil or result.code == 124 or result.signal == 9
+end
+
+local function probe_timeout_hint(timeout_ms)
+  return string.format(
+    "gpg.nvim: decrypt probe timed out after %dms (gpg did not exit). "
+      .. "This is usually a GnuPG hang (gpg-agent / use-keyboxd IPC on 2.4.1+), "
+      .. "not a plugin passphrase prompt. Confirm outside Neovim with: "
+      .. "gpg --batch --yes --pinentry-mode loopback --decrypt < file.gpg. "
+      .. "If ~/.gnupg/common.conf has use-keyboxd, export keys, disable that option, "
+      .. "and reimport. See https://github.com/benoror/gpg.nvim/issues/20",
+    timeout_ms
+  )
+end
+
 local function gpg_decrypt_loopback(ciphertext, file_path)
   -- First try: agent cache / unprotected keys. Never invokes pinentry UIs.
+  local timeout = probe_wait_timeout()
   local result = vim.system({
     "gpg",
     "--batch",
@@ -80,7 +113,14 @@ local function gpg_decrypt_loopback(ciphertext, file_path)
     "--pinentry-mode",
     "loopback",
     "--decrypt",
-  }, { stdin = ciphertext }):wait()
+  }, { stdin = ciphertext }):wait(timeout)
+
+  if timeout and probe_timed_out(result) then
+    result = result or { code = 124, stdout = "", stderr = "" }
+    result.code = result.code ~= 0 and result.code or 124
+    result.stderr = probe_timeout_hint(timeout)
+    return result
+  end
 
   if result.code == 0 then
     return result

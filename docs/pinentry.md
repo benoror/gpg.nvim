@@ -36,13 +36,28 @@ This is not a flaky passphrase; it is an input-routing conflict.
 Use GPG **loopback pinentry mode** and, when needed, prompt inside Neovim with
 `vim.fn.inputsecret()`, then pass the passphrase via `--passphrase-fd`.
 
-Decrypt flow:
+Decrypt flow (exact argv; no `--no-tty`):
 
-1. `gpg --batch --pinentry-mode loopback --decrypt` with ciphertext on stdin  
-   (succeeds when the agent already has the key, or the key has no passphrase).
+1. Probe with ciphertext on stdin. This command is **not** supposed to prompt:
+
+   `gpg --batch --yes --pinentry-mode loopback --decrypt`
+
+   It succeeds when the agent already has the key, or the key has no passphrase.
+   If the agent lacks a passphrase, GnuPG should print
+   `gpg: Sorry, we are in batchmode - can't get input` and **exit immediately**
+   (typically status 2). That message is an expected fail-fast, not a hang.
 2. If gpg reports that it needs a passphrase, prompt with `inputsecret`.
-3. Retry with `--passphrase-fd 0` and decrypt the on-disk `.gpg` file path  
-   (stdin carries only the passphrase).
+3. Retry with `--passphrase-fd 0` and decrypt the on-disk `.gpg` file path
+   (stdin carries only the passphrase):
+
+   `gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --decrypt -- <file>`
+
+A hang after the batchmode line means `gpg` did not exit. That is a GnuPG-side
+stall (often `use-keyboxd` / agent IPC on 2.4.1+; see
+[issue #20](https://github.com/benoror/gpg.nvim/issues/20)), not a missing
+plugin prompt. The probe `vim.system():wait()` uses a safety timeout
+(`vim.g.gpg_probe_timeout`, default 30000 ms; `false` or `0` waits forever)
+so a wedged `gpg` cannot freeze Neovim indefinitely.
 
 Opt out (legacy pinentry UI path):
 
@@ -92,3 +107,12 @@ vim.g.gpg_prime_agent = true
 ```
 
 Prefer leaving loopback enabled (default) instead of relying on these.
+
+## Probe wait timeout
+
+Safety limit on the loopback probe `wait()` (milliseconds). Does not disable
+loopback. `false` or `0` restores an unbounded wait.
+
+```lua
+vim.g.gpg_probe_timeout = 30000
+```
