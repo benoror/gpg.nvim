@@ -106,8 +106,20 @@ By default, decrypt uses `--pinentry-mode loopback` so Neovim owns the
 passphrase prompt via `inputsecret()` when the agent does not already have the
 key cached. This avoids `pinentry-curses` TTY contention (dropped key presses)
 inside Neovim — see [issue #8](https://github.com/benoror/gpg.nvim/issues/8)
-and [docs/pinentry.md](docs/pinentry.md) for the assessment, pros/cons, and
-alternatives.
+and [docs/pinentry.md](docs/pinentry.md) for the assessment, exact probe argv,
+pros/cons, and alternatives.
+
+The first decrypt is a **probe** (ciphertext on stdin). It is not supposed to
+prompt. If the agent lacks a passphrase, GnuPG should print
+`gpg: Sorry, we are in batchmode - can't get input` and exit; the plugin then
+prompts inside Neovim and retries with `--passphrase-fd`. A hang after that
+line means `gpg` did not exit (often GnuPG `use-keyboxd` / agent IPC —
+[issue #20](https://github.com/benoror/gpg.nvim/issues/20)), not a missing
+plugin prompt.
+
+The probe wait has a safety timeout so a wedged `gpg` cannot freeze Neovim
+forever (`vim.g.gpg_probe_timeout`, default 30000 ms; `false` or `0` waits
+indefinitely).
 
 Loopback is on by default. To restore the legacy external pinentry path:
 
@@ -171,6 +183,6 @@ https://github.com/jamessan/vim-gnupg
 
 ## Further reading
 
-- [Pinentry / passphrase notes](docs/pinentry.md) (issue #8 assessment, pros/cons)
+- [Pinentry / passphrase notes](docs/pinentry.md) (issue #8 assessment, exact probe argv, issue #20 hangs)
 - [Setup GPG on macOS](https://dev.to/zemse/setup-gpg-on-macos-2iib)
 - [vim-gnupg#32](https://github.com/jamessan/vim-gnupg/issues/32) (related Neovim + pinentry TTY contention)

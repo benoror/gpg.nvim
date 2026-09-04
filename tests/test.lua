@@ -235,6 +235,108 @@ local function assert_passphrase_retry(file, plaintext_file)
   end
 end
 
+local function assert_probe_wait_timeout(file, plaintext_file, configured, expected)
+  local original_system = vim.system
+  local seen = {}
+
+  vim.g.gpg_pinentry_loopback = nil
+  vim.g.gpg_probe_timeout = configured
+  vim.system = function(cmd, opts)
+    local obj = original_system(cmd, opts)
+    if type(cmd) == "table" and cmd[1] == "gpg" and cmd_has(cmd, "--decrypt") and not cmd_has(cmd, "--passphrase-fd") then
+      local orig_wait = obj.wait
+      function obj:wait(timeout)
+        table.insert(seen, timeout)
+        return orig_wait(self, timeout)
+      end
+    end
+    return obj
+  end
+
+  local ok, err = pcall(assert_decrypted_matches, file, plaintext_file)
+  vim.system = original_system
+  vim.g.gpg_probe_timeout = nil
+
+  if not ok then
+    error(err)
+  end
+  if #seen == 0 then
+    error("Expected probe to call wait()")
+  end
+  if seen[1] ~= expected then
+    error("Expected probe wait timeout " .. tostring(expected) .. ", got " .. tostring(seen[1]))
+  end
+end
+
+local function assert_probe_timeout_hint(file)
+  local original_system = vim.system
+  local original_inputsecret = vim.fn.inputsecret
+  local original_notify = vim.notify
+  local wait_timeout
+  local prompted = false
+  local notices = {}
+
+  vim.g.gpg_pinentry_loopback = true
+  vim.g.gpg_probe_timeout = 50
+  vim.notify = function(msg)
+    table.insert(notices, msg)
+  end
+  vim.fn.inputsecret = function()
+    prompted = true
+    return "should-not-be-used"
+  end
+  vim.system = function(cmd, opts)
+    if type(cmd) == "table" and cmd[1] == "gpg" and cmd_has(cmd, "--decrypt") then
+      if cmd_has(cmd, "--passphrase-fd") then
+        error("Should not retry passphrase-fd after probe timeout")
+      end
+      return {
+        wait = function(_, timeout)
+          wait_timeout = timeout
+          return {
+            code = 124,
+            signal = 9,
+            stdout = "",
+            stderr = "",
+          }
+        end,
+      }
+    end
+    return original_system(cmd, opts)
+  end
+
+  local ok, err = pcall(open_file, file)
+  vim.system = original_system
+  vim.fn.inputsecret = original_inputsecret
+  vim.notify = original_notify
+  vim.g.gpg_pinentry_loopback = nil
+  vim.g.gpg_probe_timeout = nil
+
+  if not ok then
+    error(err)
+  end
+  if prompted then
+    error("Did not expect inputsecret after probe timeout")
+  end
+  if wait_timeout ~= 50 then
+    error("Expected probe wait timeout 50, got " .. tostring(wait_timeout))
+  end
+  local found = false
+  for _, msg in ipairs(notices) do
+    if
+      type(msg) == "string"
+      and msg:find("timed out", 1, true)
+      and msg:find("use-keyboxd", 1, true)
+    then
+      found = true
+      break
+    end
+  end
+  if not found then
+    error("Expected timeout notify to mention GnuPG/keyboxd")
+  end
+end
+
 function M.run()
   local file = get_env_or_error "GPG_TEST_FILE"
   local plaintext_file = get_env_or_error "GPG_TEST_PLAINTEXT_FILE"
@@ -256,6 +358,11 @@ function M.run()
   -- Content checks that need the unmodified fixture must run before write.
   restore_mocks()
   assert_passphrase_retry(file, plaintext_file)
+  assert_probe_timeout_hint(file)
+  assert_probe_wait_timeout(file, plaintext_file, nil, 30000)
+  assert_probe_wait_timeout(file, plaintext_file, 12345, 12345)
+  assert_probe_wait_timeout(file, plaintext_file, false, nil)
+  assert_probe_wait_timeout(file, plaintext_file, 0, nil)
 
   calls, restore_mocks = with_gpg_mocks()
   vim.g.gpg_update_tty = nil
