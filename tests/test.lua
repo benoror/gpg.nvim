@@ -32,6 +32,10 @@ local function get_env_or_error(name)
 end
 
 local function open_file(path)
+  local buf = vim.fn.bufnr(path)
+  if buf ~= -1 then
+    vim.cmd("bwipeout! " .. buf)
+  end
   vim.cmd("edit " .. vim.fn.fnameescape(path))
 end
 
@@ -237,20 +241,23 @@ end
 
 local function assert_probe_wait_timeout(file, plaintext_file, configured, expected)
   local original_system = vim.system
-  local seen = {}
+  local wait_called = false
+  local seen_timeout = "unset"
+  local stdout = table.concat(read_lines(plaintext_file), "\n") .. "\n"
 
   vim.g.gpg_pinentry_loopback = nil
   vim.g.gpg_probe_timeout = configured
   vim.system = function(cmd, opts)
-    local obj = original_system(cmd, opts)
     if type(cmd) == "table" and cmd[1] == "gpg" and cmd_has(cmd, "--decrypt") and not cmd_has(cmd, "--passphrase-fd") then
-      local orig_wait = obj.wait
-      function obj:wait(timeout)
-        table.insert(seen, timeout)
-        return orig_wait(self, timeout)
-      end
+      return {
+        wait = function(_, timeout)
+          wait_called = true
+          seen_timeout = timeout
+          return { code = 0, stdout = stdout, stderr = "" }
+        end,
+      }
     end
-    return obj
+    return original_system(cmd, opts)
   end
 
   local ok, err = pcall(assert_decrypted_matches, file, plaintext_file)
@@ -260,11 +267,11 @@ local function assert_probe_wait_timeout(file, plaintext_file, configured, expec
   if not ok then
     error(err)
   end
-  if #seen == 0 then
+  if not wait_called then
     error("Expected probe to call wait()")
   end
-  if seen[1] ~= expected then
-    error("Expected probe wait timeout " .. tostring(expected) .. ", got " .. tostring(seen[1]))
+  if seen_timeout ~= expected then
+    error("Expected probe wait timeout " .. tostring(expected) .. ", got " .. tostring(seen_timeout))
   end
 end
 
